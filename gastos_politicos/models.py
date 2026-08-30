@@ -6,7 +6,7 @@ class Governador(models.Model):
     partido = models.CharField(max_length=50)
     estado = models.CharField(max_length=2)
     inicio_mandato = models.DateField()
-    fim_mandato = models.DateField()
+    fim_mandato = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.nome} ({self.estado})"
