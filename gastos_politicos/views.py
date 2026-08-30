@@ -50,18 +50,26 @@ class EstadosInfoView(APIView):
 
 
 def painel(request):
-    """Página de visualização: ranking de gastos por governador + dados do IBGE."""
-    governadores_qs = Governador.objects.annotate(
-        total_gasto=Sum("gastos__valor")
-    ).order_by("-total_gasto")
+    """Página de visualização: cofrinhos de gasto por governador + dados do IBGE."""
+    governadores_qs = list(Governador.objects.annotate(total_gasto=Sum("gastos__valor")))
 
-    maior_total = governadores_qs.first().total_gasto if governadores_qs.exists() else None
+    valores = [g.total_gasto for g in governadores_qs if g.total_gasto]
+    maior_valor = max(valores) if valores else None
+
+    # governador atual (fim_mandato em aberto) primeiro, depois os demais do mais recente pro mais antigo
+    governadores_qs.sort(key=lambda g: (g.fim_mandato is not None, -g.inicio_mandato.toordinal()))
 
     ranking = []
     for g in governadores_qs:
         total = g.total_gasto or 0
-        pct = int((total / maior_total) * 100) if maior_total else 0
-        ranking.append({"governador": g, "total": total, "pct": pct})
+        pct = int((total / maior_valor) * 100) if maior_valor else 0
+        ranking.append({
+            "governador": g,
+            "total": total,
+            "pct": pct,
+            "eh_maior": bool(maior_valor) and g.total_gasto == maior_valor,
+            "sem_dados": not g.total_gasto,
+        })
 
     estados_info = []
     for sigla in Governador.objects.values_list("estado", flat=True).distinct():

@@ -1,108 +1,169 @@
+{% load gastos_extras %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Gastos de Governadores</title>
+    <title>Gastos Totais por Governadores</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 900px;
-            margin: 40px auto;
-            padding: 0 20px;
-            color: #222;
-            background: #fff;
+        :root {
+            --beige: #F3ECDD;
+            --blue: #DCEAF0;
+            --blue-line: #B9D2DC;
+            --green: #55805F;
+            --green-deep: #3E6248;
+            --green-soft: #8FB49A;
+            --gray: #8B8981;
+            --gray-line: #C9C6BB;
+            --ink: #3A382F;
         }
-        h1, h2 {
-            border-bottom: 2px solid #ddd;
-            padding-bottom: 8px;
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Work Sans', sans-serif; background: var(--beige); color: var(--ink); }
+        a { color: var(--green-deep); }
+        a:hover { color: var(--green); }
+        .page { min-height: 100vh; padding: 56px 40px 72px; }
+        .header { display: flex; align-items: center; gap: 16px; max-width: 1040px; margin: 0 auto 8px; }
+        .header h1 {
+            font-family: 'Bricolage Grotesque', sans-serif;
+            font-weight: 800; font-size: 36px; margin: 0; letter-spacing: -0.01em;
         }
-        .barra-linha {
-            display: flex;
-            align-items: center;
-            margin: 10px 0;
+        .subtitle { max-width: 1040px; margin: 0 auto 44px; color: var(--gray); font-size: 15px; }
+        .cards-row {
+            max-width: 1040px; margin: 0 auto; display: flex; gap: 24px;
+            flex-wrap: wrap; justify-content: center; align-items: flex-start;
         }
-        .barra-nome {
-            width: 220px;
-            font-size: 14px;
+        .card {
+            background: var(--blue); border: 2px solid var(--blue-line); border-radius: 22px;
+            padding: 26px 22px 22px; width: 220px; display: flex; flex-direction: column;
+            align-items: center; gap: 14px; text-align: center;
         }
-        .barra-fundo {
-            flex: 1;
-            background: #eee;
-            border-radius: 4px;
-            overflow: hidden;
+        .card.atual { border-color: var(--green); box-shadow: 0 0 0 3px rgba(85, 128, 95, 0.18); }
+        .badge {
+            font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+            padding: 5px 12px; border-radius: 999px; color: #fff; background: var(--gray);
         }
-        .barra-preenchida {
-            background: #2b6cb0;
-            color: white;
-            padding: 4px 8px;
-            font-size: 13px;
-            white-space: nowrap;
+        .badge.atual { background: var(--green); }
+        .badge.maior { background: var(--green-deep); }
+        .nome { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 18px; margin: 0; line-height: 1.15; }
+        .meta { font-size: 12.5px; color: var(--gray); margin: -8px 0 0; }
+        .cofre {
+            width: 116px; height: 128px; border-radius: 30px; background: #fff;
+            border: 3px solid var(--gray-line); position: relative; overflow: hidden;
         }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
+        .cofre-fill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 18px 18px 0 0; z-index: 1; }
+        .cofre-fill.maior { background: linear-gradient(180deg, #6FA07A, var(--green-deep)); }
+        .cofre-fill.menor { background: linear-gradient(180deg, var(--green-soft), #6B9679); }
+        .cofre-vazio-nota {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            font-size: 10.5px; color: var(--gray); padding: 8px; text-align: center; line-height: 1.3; z-index: 1;
         }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-            font-size: 14px;
+        .total-wrap {
+            font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 15px;
+            margin: 0; cursor: default;
         }
-        th {
-            background: #f5f5f5;
+        .total-wrap.maior { color: var(--green-deep); }
+        .total-wrap .exato { display: none; }
+        .cofre:hover ~ .total-wrap .simplificado { display: none; }
+        .cofre:hover ~ .total-wrap .exato { display: inline; }
+        .cofre { cursor: default; }
+        .legenda {
+            max-width: 1040px; margin: 40px auto 0; display: flex; gap: 22px;
+            justify-content: center; flex-wrap: wrap; font-size: 12.5px; color: var(--gray);
         }
-        .erro {
-            color: #b00020;
+        .legenda span { display: inline-flex; align-items: center; gap: 6px; }
+        .ponto { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+        .ponto.maior { background: var(--green-deep); }
+        .ponto.menor { background: var(--green-soft); }
+        h2 { max-width: 1040px; margin: 56px auto 12px; font-family: 'Bricolage Grotesque', sans-serif; }
+        .ibge { max-width: 1040px; margin: 0 auto; }
+        table { width: 100%; max-width: 1040px; margin: 12px auto 0; border-collapse: collapse; background: #fff; }
+        th, td { border: 1px solid var(--gray-line); padding: 8px 10px; text-align: left; font-size: 13.5px; }
+        th { background: var(--blue); }
+        .erro { color: #b00020; }
+        @media (max-width: 640px) {
+            .page { padding: 40px 20px 56px; }
+            .header h1 { font-size: 28px; }
         }
     </style>
 </head>
 <body>
-    <h1>Gastos de Governadores</h1>
-
-    <h2>Ranking por total gasto</h2>
-    {% for item in ranking %}
-        <div class="barra-linha">
-            <div class="barra-nome">{{ item.governador.nome }} ({{ item.governador.estado }})</div>
-            <div class="barra-fundo">
-                <div class="barra-preenchida" style="width: {{ item.pct }}%;">
-                    R$ {{ item.total|floatformat:2 }}
-                </div>
-            </div>
+    <div class="page">
+        <div class="header">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="9" width="18" height="12" rx="4" stroke="#3E6248" stroke-width="1.6"/>
+                <path d="M7 9V7a5 5 0 0 1 10 0v2" stroke="#3E6248" stroke-width="1.6" stroke-linecap="round"/>
+                <circle cx="12" cy="15" r="1.6" fill="#3E6248"/>
+            </svg>
+            <h1>Gastos Totais por Governadores</h1>
         </div>
-    {% empty %}
-        <p>Nenhum governador cadastrado.</p>
-    {% endfor %}
+        <p class="subtitle">Total apurado de gastos por mandato (todos os órgãos), do governador atual aos anteriores.</p>
 
-    <h2>Dados dos estados (API do IBGE)</h2>
-    {% for info in estados_info %}
-        {% if info.erro %}
-            <p class="erro">{{ info.sigla }}: {{ info.erro }}</p>
-        {% else %}
-            <p><strong>{{ info.nome }}</strong> ({{ info.sigla }}) — Região: {{ info.regiao.nome }}</p>
-        {% endif %}
-    {% endfor %}
+        <div class="cards-row">
+            {% for item in ranking %}
+            <div class="card {% if item.governador.fim_mandato is None %}atual{% endif %}">
+                {% if item.governador.fim_mandato is None %}
+                    <div class="badge atual">Governador atual</div>
+                {% elif item.eh_maior %}
+                    <div class="badge maior">Maior gasto</div>
+                {% else %}
+                    <div class="badge">Mandato anterior</div>
+                {% endif %}
+                <p class="nome">{{ item.governador.nome }}</p>
+                <p class="meta">{{ item.governador.partido }} · {{ item.governador.inicio_mandato|date:"Y" }}–{% if item.governador.fim_mandato %}{{ item.governador.fim_mandato|date:"Y" }}{% else %}atual{% endif %}</p>
+                <div class="cofre">
+                    {% if item.sem_dados %}
+                        <div class="cofre-vazio-nota">Sem gastos<br>apurados ainda</div>
+                    {% else %}
+                        <div class="cofre-fill {% if item.eh_maior %}maior{% else %}menor{% endif %}" style="height: {{ item.pct }}%;"></div>
+                    {% endif %}
+                </div>
+                <p class="total-wrap {% if item.eh_maior %}maior{% endif %}">
+                    <span class="simplificado">R$ {{ item.total|brl_compacto }}</span>
+                    <span class="exato">R$ {{ item.total|brl }}</span>
+                </p>
+            </div>
+            {% endfor %}
+        </div>
 
-    <h2>Todos os gastos</h2>
-    <table>
-        <tr>
-            <th>Governador</th>
-            <th>Categoria</th>
-            <th>Valor</th>
-            <th>Data</th>
-            <th>Órgão</th>
-            <th>Fonte</th>
-        </tr>
-        {% for gasto in gastos %}
-        <tr>
-            <td>{{ gasto.governador.nome }}</td>
-            <td>{{ gasto.categoria }}</td>
-            <td>R$ {{ gasto.valor }}</td>
-            <td>{{ gasto.data }}</td>
-            <td>{{ gasto.orgao }}</td>
-            <td><a href="{{ gasto.fonte_url }}" target="_blank">link</a></td>
-        </tr>
-        {% endfor %}
-    </table>
+        <div class="legenda">
+            <span><i class="ponto maior"></i> Maior total apurado entre os 4</span>
+            <span><i class="ponto menor"></i> Total apurado abaixo do maior</span>
+        </div>
+
+        <h2>Dados dos estados (API do IBGE)</h2>
+        <div class="ibge">
+            {% for info in estados_info %}
+                {% if info.erro %}
+                    <p class="erro">{{ info.sigla }}: {{ info.erro }}</p>
+                {% else %}
+                    <p><strong>{{ info.nome }}</strong> ({{ info.sigla }}) — Região: {{ info.regiao.nome }}</p>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <h2>Todos os gastos cadastrados</h2>
+        <table>
+            <tr>
+                <th>Governador</th>
+                <th>Categoria</th>
+                <th>Valor</th>
+                <th>Data de apuração</th>
+                <th>Órgão</th>
+                <th>Fonte</th>
+            </tr>
+            {% for gasto in gastos %}
+            <tr>
+                <td>{{ gasto.governador.nome }}</td>
+                <td>{{ gasto.categoria }}</td>
+                <td>R$ {{ gasto.valor|brl }}</td>
+                <td>{{ gasto.data }}</td>
+                <td>{{ gasto.orgao }}</td>
+                <td><a href="{{ gasto.fonte_url }}" target="_blank">link</a></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
 </body>
 </html>
