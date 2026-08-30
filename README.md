@@ -4,18 +4,34 @@ Projeto Django (Workshop de Backend — Fábrica de Software 26.2).
 
 ## Descrição
 
-API para cadastro de governadores e seus gastos públicos por mandato.
-Cada gasto é registrado com categoria, valor, data, órgão responsável e
-a URL da fonte oficial (Portal da Transparência do estado da Paraíba).
-A API também consulta a API pública do IBGE para trazer informações
-complementares (nome completo e região) dos estados já cadastrados.
+API + página de visualização sobre gastos de governadores da Paraíba por
+mandato. Cada `Governador` tem um ou mais `Gasto` associados (relação 1-N
+via chave estrangeira). O valor de cada `Gasto` cadastrado hoje representa
+o **total real apurado do mandato inteiro** — soma de todas as notas de
+empenho, de todos os órgãos do estado, mês a mês, do início ao fim do
+mandato — calculado a partir da API oficial de dados abertos da Paraíba
+(`api.dados.pb.gov.br`). A API também consulta a API pública do IBGE para
+trazer nome completo e região dos estados já cadastrados.
 
-Entidades relacionadas: um `Governador` pode ter vários `Gasto` (relação
-1-N via chave estrangeira, `on_delete=PROTECT`).
+## Status dos requisitos
 
-O banco já vem populado (via migration de dados) com 4 governadores reais
-da Paraíba e 2 gastos reais extraídos da API oficial de dados abertos do
-estado (`api.dados.pb.gov.br`).
+**Obrigatórios (100% concluído):**
+- CRUD completo com 2+ entidades relacionadas por FK (`Governador` → `Gasto`)
+- Consumo de API externa com tratamento de erro (`try/except`, status codes)
+- `.gitignore`, `requirements.txt`, `README.md`
+- Nome do repositório correto (`wsBackendFabricaDeSoftware26.2`)
+
+**Diferenciais implementados:**
+- Commits semânticos
+- Organização de diretórios e boas práticas
+- Documentação (este README) e GitHub
+- Página funcional com HTML/CSS (`/`)
+- Tokens de autenticação (DRF Token Authentication)
+- Swagger para documentação da API (`drf-spectacular`)
+
+**Diferenciais não implementados (escolha do autor, por tempo/escopo):**
+- Banco de dados externo (MySQL/PostgreSQL) — o projeto usa SQLite
+- Docker-compose
 
 ## Como instalar
 
@@ -42,30 +58,27 @@ python manage.py runserver
 
 ## Autenticação
 
-Todos os endpoints em `/api/` (exceto `/api/token/` e o painel em `/`)
-exigem autenticação via **Token do Django REST Framework**.
-
-1. Crie um usuário (`createsuperuser` ou pelo `/admin/`).
-2. Obtenha o token:
+Todos os endpoints em `/api/` (exceto `/api/token/`) e o painel em `/`
+exigem autenticação via **Token do Django REST Framework**, obtido assim:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/token/ -d "username=SEU_USUARIO&password=SUA_SENHA"
 ```
 
-3. Use o token retornado no header das próximas requisições:
+Use o token retornado no header das próximas requisições:
 
 ```
 Authorization: Token <token retornado>
 ```
 
-Pela interface do Swagger (`/api/docs/`), use o botão **Authorize** e cole
-`Token <token>` para testar os endpoints direto do navegador.
+Pela Swagger UI (`/api/docs/`), use o botão **Authorize** e cole
+`Token <token>`.
 
 ## Endpoints
 
 | Método | Endpoint | Descrição | Autenticação |
 |---|---|---|---|
-| GET | `/` | Painel visual (ranking de gastos, dados do IBGE, tabela de gastos) | Não |
+| GET | `/` | Painel visual (cofrinhos por governador + dados do IBGE) | Não |
 | GET | `/admin/` | Painel administrativo do Django | Login de sessão |
 | POST | `/api/token/` | Obtém o token de autenticação | Não |
 | GET/POST | `/api/governadores/` | Lista ou cria governadores | Token |
@@ -76,12 +89,91 @@ Pela interface do Swagger (`/api/docs/`), use o botão **Authorize** e cole
 | GET | `/api/schema/` | Schema OpenAPI (JSON) | Token |
 | GET | `/api/docs/` | Interface Swagger interativa | Token |
 
-## Diferenciais implementados
+## Metodologia e decisões técnicas
 
-- Commits semânticos
-- Organização de diretórios e boas práticas (app separada por
-  responsabilidade: models, serializers, views, urls)
-- Documentação (este README) e repositório no GitHub
-- Página funcional com HTML/CSS (`/`)
-- Tokens de autenticação (DRF Token Authentication)
-- Swagger para documentação da API (`drf-spectacular`)
+### Por que "total apurado do mandato" e não uma amostra
+
+A primeira versão do projeto cadastrava manualmente **1 gasto de exemplo**
+por governador, extraído de uma única nota de empenho da API oficial.
+Isso deixou claro um problema: pegar 1 registro dá um número na casa dos
+milhões (o valor de 1 nota, de 1 órgão, em 1 mês), enquanto o total real
+de um mandato inteiro está na casa das **dezenas de bilhões** — a diferença
+não é erro da API, é a diferença entre um item individual e um agregado.
+
+Para resolver isso de verdade (e não só cosmeticamente), foi escrito um
+script (`somar_gastos_pb.py`, fora do controle de versão do projeto —
+ferramenta de apuração, não parte da aplicação) que:
+1. Para cada mês dentro do intervalo exato do mandato de cada governador,
+   consulta `GET /despesas/orcamentarias?ano=X&mes=Y&page=N&per_page=1000`;
+2. Soma o campo `valorEmpenhado` de **todos os registros de todas as
+   páginas** daquele mês (a API pagina os resultados; um mês comum tem
+   2 a 7 mil registros);
+3. Soma os totais mensais para chegar ao total do mandato.
+
+Esse total é o que está gravado como `Gasto.valor` hoje — por isso o
+`categoria` desses registros é literalmente
+`"Total apurado do mandato (todos os órgãos, elaboração própria via API
+oficial)"`, deixando explícito que é um número **computado por nós a
+partir de dados oficiais**, não um número publicado pronto pelo governo.
+Isso importa para honestidade dos dados: `fonte_url` aponta pro dataset
+oficial de onde os números vieram, mas a soma em si é nossa.
+
+**Limite assumido conscientemente**: os meses de transição entre
+mandatos (ex: quando um governador sai e outro assume no meio do ano) são
+atribuídos por completo a quem ficou a maior parte do mês, já que a API
+só filtra por mês inteiro, não por dia. Não valia a pena complicar o
+script pra dividir um mês entre dois governadores por causa de poucos
+dias de diferença.
+
+### Por que Token do DRF e não JWT
+
+Ambos cumprem o diferencial "tokens de autenticação". O Token do DRF foi
+escolhido por ser **mais simples de configurar e explicar**: é uma string
+opaca de 40 caracteres por usuário, sem expiração automática, guardada
+numa tabela (`authtoken_token`) — o servidor consulta o banco a cada
+requisição pra saber de quem é. JWT exigiria configurar geração/validação
+de assinatura e política de expiração/refresh, complexidade que não
+agregava valor ao escopo do desafio.
+
+### Por que a API do IBGE, e por que ela é separada do CRUD
+
+O requisito pede consumo de "endpoint gratuito" com tratamento de erro —
+não pede que a API externa alimente os dados principais do CRUD. Por
+isso a consulta ao IBGE (`/api/estados/` e a seção "Dados dos estados" no
+painel) é **só leitura**, isolada dos models `Governador`/`Gasto`: ela
+nunca escreve no banco, então não corre risco de misturar dado real
+cadastrado manualmente/apurado com dado de uma API que pode falhar ou
+ficar fora do ar.
+
+### Por que os números do painel trocam de formato ao passar o mouse
+
+Os totais em bilhões (`R$ 77.115.197.185,87`) são difíceis de ler de
+relance num cartão pequeno. A solução foi mostrar por padrão um formato
+resumido (`R$ 77.12B`) e revelar o valor exato só ao passar o mouse sobre
+o cofrinho — implementado **inteiramente em CSS** (seletor `:hover` +
+irmão geral `~`), sem JavaScript, consistente com o resto da página que
+não usa nenhum script.
+
+### Por que um filtro de template customizado para formatação monetária
+
+O `LANGUAGE_CODE` do projeto está em `en-us`, então os filtros nativos do
+Django (`floatformat`, `intcomma` do `django.contrib.humanize`) formatam
+número no padrão americano (vírgula de milhar, ponto decimal) a não ser
+que a localização inteira do projeto fosse trocada — o que afetaria
+outras partes (datas, admin, etc). Em vez disso, foi criado um filtro
+próprio (`gastos_politicos/templatetags/gastos_extras.py`, filtros `brl`
+e `brl_compacto`) que formata só os números monetários no padrão
+brasileiro, sem mexer na localização geral do projeto.
+
+### Problemas de ambiente encontrados (Windows)
+
+- **`pip install` falhando com "Fatal error in launcher"**: a pasta do
+  projeto fica em `Área de Trabalho` (tem acento). O launcher do
+  `pip.exe` grava o caminho do Python como texto fixo no executável, e
+  caracteres acentuados corrompem esse caminho. Contornado usando
+  `python -m pip install ...` em vez de `pip install ...` (usa o
+  `python.exe` direto, sem depender do launcher `pip.exe`).
+- **Script de apuração sem mostrar progresso**: o Python bufferiza a
+  saída padrão quando ela não vai pra um terminal interativo (como
+  quando roda em background). Resolvido rodando com `python -u`
+  (unbuffered).
