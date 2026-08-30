@@ -174,14 +174,19 @@ não usa nenhum script.
 
 ### Por que um filtro de template customizado para formatação monetária
 
-O `LANGUAGE_CODE` do projeto está em `en-us`, então os filtros nativos do
-Django (`floatformat`, `intcomma` do `django.contrib.humanize`) formatam
-número no padrão americano (vírgula de milhar, ponto decimal) a não ser
-que a localização inteira do projeto fosse trocada — o que afetaria
-outras partes (datas, admin, etc). Em vez disso, foi criado um filtro
-próprio (`gastos_politicos/templatetags/gastos_extras.py`, filtros `brl`
-e `brl_compacto`) que formata só os números monetários no padrão
-brasileiro, sem mexer na localização geral do projeto.
+O filtro próprio (`gastos_politicos/templatetags/gastos_extras.py`,
+`brl` e `brl_compacto`) foi criado quando o `LANGUAGE_CODE` do projeto
+ainda estava em `en-us` — os filtros nativos do Django formatavam número
+no padrão americano, e trocar a localização inteira do projeto na época
+afetaria outras partes (datas, admin) sem necessidade.
+
+Depois o `LANGUAGE_CODE` foi trocado para `pt-br` (e `TIME_ZONE` para
+`America/Recife`), o que já deixa datas e textos do admin em português
+automaticamente (ex: "30 de Agosto de 2026" na tabela de gastos). Mesmo
+assim, o filtro `brl` continua sendo usado: ele não depende de nenhuma
+configuração de localização pra funcionar (é formatação Python pura), o
+que o torna mais previsível — funcionaria igual mesmo se o
+`LANGUAGE_CODE` mudasse de novo no futuro.
 
 ### Problemas de ambiente encontrados (Windows)
 
