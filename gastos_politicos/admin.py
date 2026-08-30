@@ -1,3 +1,6 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import Governador, Gasto
+
+admin.site.register(Governador)
+admin.site.register(Gasto)
