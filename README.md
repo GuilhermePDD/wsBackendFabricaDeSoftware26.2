@@ -58,8 +58,13 @@ python manage.py runserver
 
 ## Autenticação
 
-Todos os endpoints em `/api/` (exceto `/api/token/`) e o painel em `/`
-exigem autenticação via **Token do Django REST Framework**, obtido assim:
+Os endpoints de CRUD (`/api/governadores/`, `/api/gastos/`, `/api/estados/`)
+exigem autenticação via **Token do Django REST Framework**. O painel visual
+(`/`), a obtenção de token (`/api/token/`) e a documentação Swagger
+(`/api/schema/`, `/api/docs/`) são públicos — não pedem token, pra permitir
+explorar a API antes de autenticar.
+
+Obtenha um token assim:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/token/ -d "username=SEU_USUARIO&password=SUA_SENHA"
@@ -86,8 +91,8 @@ Pela Swagger UI (`/api/docs/`), use o botão **Authorize** e cole
 | GET/POST | `/api/gastos/` | Lista ou cria gastos (requer `governador` por ID) | Token |
 | GET/PUT/PATCH/DELETE | `/api/gastos/{id}/` | Detalha, atualiza ou remove um gasto | Token |
 | GET | `/api/estados/` | Consulta a API do IBGE para os estados já cadastrados em `Governador` | Token |
-| GET | `/api/schema/` | Schema OpenAPI (JSON) | Token |
-| GET | `/api/docs/` | Interface Swagger interativa | Token |
+| GET | `/api/schema/` | Schema OpenAPI (JSON) | Não |
+| GET | `/api/docs/` | Interface Swagger interativa | Não |
 
 ## Metodologia e decisões técnicas
 
@@ -135,6 +140,19 @@ requisição pra saber de quem é. JWT exigiria configurar geração/validação
 de assinatura e política de expiração/refresh, complexidade que não
 agregava valor ao escopo do desafio.
 
+### Tratamento de erro também no DELETE (não só na API externa)
+
+O enunciado pede tratamento de erro explicitamente para o consumo da API
+externa, mas durante os testes foi encontrado outro ponto real: como
+`Gasto.governador` usa `on_delete=PROTECT`, tentar apagar um `Governador`
+que já tem gastos cadastrados fazia o Django levantar `ProtectedError` sem
+tratamento, resultando num **erro 500 cru** (com `DEBUG=True`, isso expõe
+a página de debug do Django pra quem chamar a API). Corrigido sobrescrevendo
+`destroy()` em `GovernadorViewSet` pra capturar `ProtectedError` e devolver
+`409 Conflict` com uma mensagem clara — sem isso, qualquer avaliador que
+tentasse apagar um governador com gasto veria uma tela de erro feia em vez
+de uma resposta de API decente.
+
 ### Por que a API do IBGE, e por que ela é separada do CRUD
 
 O requisito pede consumo de "endpoint gratuito" com tratamento de erro —
@@ -177,3 +195,16 @@ brasileiro, sem mexer na localização geral do projeto.
   saída padrão quando ela não vai pra um terminal interativo (como
   quando roda em background). Resolvido rodando com `python -u`
   (unbuffered).
+
+## Limitações conhecidas (não corrigidas, escopo de projeto de disciplina)
+
+- `SECRET_KEY` e `DEBUG=True` estão como o `django-admin startproject`
+  gera por padrão, direto no `settings.py` versionado — aceitável para
+  rodar localmente/avaliação, mas **não deve ir pra produção** assim. Em
+  produção real, isso viraria variável de ambiente (`.env`, já ignorado
+  pelo `.gitignore`) e `DEBUG=False`.
+- A consulta ao IBGE no painel (`/`) é feita a cada carregamento da
+  página, sem cache — se o IBGE estiver lento, a página demora junto
+  (até o timeout de 5s por estado consultado). Não é um bug, é uma
+  simplificação consciente: o projeto tem poucos estados cadastrados
+  (hoje só PB), então o custo é baixo.

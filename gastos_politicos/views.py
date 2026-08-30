@@ -1,5 +1,5 @@
 import requests
-from django.db.models import Sum
+from django.db.models import ProtectedError, Sum
 from django.shortcuts import render
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
@@ -25,9 +25,27 @@ def consultar_ibge(sigla):
         return None, f"Erro inesperado ao consultar o IBGE: {e}"
 
 
+def buscar_estados_cadastrados_info():
+    """Consulta o IBGE para cada sigla de estado distinta cadastrada em Governador."""
+    resultados = []
+    for sigla in Governador.objects.values_list("estado", flat=True).distinct():
+        dados, erro = consultar_ibge(sigla)
+        resultados.append(dados if dados else {"sigla": sigla, "erro": erro})
+    return resultados
+
+
 class GovernadorViewSet(viewsets.ModelViewSet):
     queryset = Governador.objects.all()
     serializer_class = GovernadorSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "Não é possível remover este governador porque há gastos cadastrados para ele."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
 
 class GastoViewSet(viewsets.ModelViewSet):
@@ -39,14 +57,7 @@ class EstadosInfoView(APIView):
     """Consulta a API do IBGE para cada estado já cadastrado em Governador."""
 
     def get(self, request):
-        siglas = Governador.objects.values_list("estado", flat=True).distinct()
-        resultados = []
-
-        for sigla in siglas:
-            dados, erro = consultar_ibge(sigla)
-            resultados.append(dados if dados else {"estado": sigla, "erro": erro})
-
-        return Response(resultados, status=status.HTTP_200_OK)
+        return Response(buscar_estados_cadastrados_info(), status=status.HTTP_200_OK)
 
 
 def painel(request):
@@ -71,10 +82,7 @@ def painel(request):
             "sem_dados": not g.total_gasto,
         })
 
-    estados_info = []
-    for sigla in Governador.objects.values_list("estado", flat=True).distinct():
-        dados, erro = consultar_ibge(sigla)
-        estados_info.append(dados if dados else {"sigla": sigla, "erro": erro})
+    estados_info = buscar_estados_cadastrados_info()
 
     gastos = Gasto.objects.select_related("governador").order_by("-data")
 
