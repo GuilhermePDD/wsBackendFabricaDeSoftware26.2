@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Gastos de Governadores</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            color: #222;
+            background: #fff;
+        }
+        h1, h2 {
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 8px;
+        }
+        .barra-linha {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .barra-nome {
+            width: 220px;
+            font-size: 14px;
+        }
+        .barra-fundo {
+            flex: 1;
+            background: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .barra-preenchida {
+            background: #2b6cb0;
+            color: white;
+            padding: 4px 8px;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            font-size: 14px;
+        }
+        th {
+            background: #f5f5f5;
+        }
+        .erro {
+            color: #b00020;
+        }
+    </style>
+</head>
+<body>
+    <h1>Gastos de Governadores</h1>
+
+    <h2>Ranking por total gasto</h2>
+    {% for item in ranking %}
+        <div class="barra-linha">
+            <div class="barra-nome">{{ item.governador.nome }} ({{ item.governador.estado }})</div>
+            <div class="barra-fundo">
+                <div class="barra-preenchida" style="width: {{ item.pct }}%;">
+                    R$ {{ item.total|floatformat:2 }}
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <p>Nenhum governador cadastrado.</p>
+    {% endfor %}
+
+    <h2>Dados dos estados (API do IBGE)</h2>
+    {% for info in estados_info %}
+        {% if info.erro %}
+            <p class="erro">{{ info.sigla }}: {{ info.erro }}</p>
+        {% else %}
+            <p><strong>{{ info.nome }}</strong> ({{ info.sigla }}) — Região: {{ info.regiao.nome }}</p>
+        {% endif %}
+    {% endfor %}
+
+    <h2>Todos os gastos</h2>
+    <table>
+        <tr>
+            <th>Governador</th>
+            <th>Categoria</th>
+            <th>Valor</th>
+            <th>Data</th>
+            <th>Órgão</th>
+            <th>Fonte</th>
+        </tr>
+        {% for gasto in gastos %}
+        <tr>
+            <td>{{ gasto.governador.nome }}</td>
+            <td>{{ gasto.categoria }}</td>
+            <td>R$ {{ gasto.valor }}</td>
+            <td>{{ gasto.data }}</td>
+            <td>{{ gasto.orgao }}</td>
+            <td><a href="{{ gasto.fonte_url }}" target="_blank">link</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
